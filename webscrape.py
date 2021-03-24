@@ -65,11 +65,64 @@ def main():
 	performance_girls = pd.DataFrame(columns=performance_columns)
 	performance_boys = pd.DataFrame(columns=performance_columns)
 
-	# "https://www.athletic.net/CrossCountry/Results/Meet.aspx?Meet=119954&show=all"
-	urls = ["https://www.athletic.net/CrossCountry/Results/Meet.aspx?Meet=189652&show=all"]
-	for url in urls:
+	# 2008 with no Team Scores
+	# https://www.athletic.net/CrossCountry/Results/Meet.aspx?Meet=13077&show=all
 
-		r = requests.get(url)
+	# 2016 multi races for gender
+	# "https://www.athletic.net/CrossCountry/Results/Meet.aspx?Meet=119954&show=all"
+
+	# 2021 Race
+	#urls = ["https://www.athletic.net/CrossCountry/Results/Meet.aspx?Meet=189652&show=all"]
+
+	# 2021 Not Igraham race
+	#urls = ["https://www.athletic.net/CrossCountry/Results/Meet.aspx?Meet=190456&show=all"]
+
+	#for url in urls:
+
+	# Setup Files
+	fieldnames_performances = ['id', 'ram', 'race', 'race_time', 'depth', 'place', 'grade', 'season', 'meet_team_rank']
+	fieldnames_races = ['id', 'date', 'location', 'season', 'bg', 'race_name', 'distance', 'type', 'score', 'place', 'teams']
+
+	continue_requesting = True
+	successful_request = False
+	meet_id = 0
+	sequential_requests_no_data = 0
+
+	while continue_requesting:
+
+		meet_id += 1
+
+		if meet_id % 1000 == 0:
+			print('Checked meet ids ' + str(meet_id - 1000) + ' to ' + str(meet_id - 1))
+
+		try:
+			url = 'https://www.athletic.net/CrossCountry/Results/Meet.aspx?Meet=' + str(meet_id) + '&show=all'
+			r = requests.get(url)
+		except:
+			if successful_request:
+				continue_requesting = False
+
+			continue
+
+
+		if 'File or directory not found' in r.text:
+			sequential_requests_no_data += 1
+		else:
+			successful_request = True
+			sequential_requests_no_data = 0
+
+		if sequential_requests_no_data > 50 and successful_request:
+			continue_requesting = False
+
+		# Check for Ingraham School Id
+		if 'Ingraham' not in r.text or '"420"' not in r.text:
+			continue
+
+		with open('races.csv') as races_file:
+			if str(meet_id) + '-' in races_file.read():
+				continue
+
+		print('Found Ingraham for meet_id: ' + str(meet_id))
 
 		soup = BeautifulSoup(r.content, 'html.parser')
 		if soup.title is not None:
@@ -81,6 +134,7 @@ def main():
 
 			eventDateString = meetDetails[0].next.text
 			eventDate = datetime.strptime(eventDateString + ' 00:00:00', '%A, %B %d, %Y %H:%M:%S')
+
 			eventSeason = eventDate.year
 
 			# Special Case to treat Spring 2021 Season as 2020
@@ -90,10 +144,9 @@ def main():
 			eventLocation = meetDetails[0].next.next.next.next.next.text
 			race_id = 0
 
-			with open('races.csv', 'wb') as csvfile:
+			with open('races.csv', 'ab') as csvfile:
 				fieldnames_races = ['id', 'date', 'location', 'season', 'bg', 'race_name', 'distance', 'type', 'score', 'place', 'teams']
 				writer_races = csv.DictWriter(csvfile, fieldnames=fieldnames_races)
-				writer_races.writeheader()
 
 				for resultSection in soup.find_all('div', {"class" : "tab-pane"}):
 
@@ -126,7 +179,11 @@ def main():
 										else:
 											eventType = 'mix'
 
-										eventDistanceMiles = Decimal(eventFullType.split(" ")[0].replace("," , "")) / Decimal(1600)
+										eventDistanceMiles = Decimal(eventFullType.split(" ")[0].replace("," , ""))
+
+										# Check to convert meters to miles
+										if eventDistanceMiles >= 10:
+											eventDistanceMiles = round(Decimal(eventFullType.split(" ")[0].replace("," , "")) / Decimal(1600), 1)
 
 								numberResults = 0
 
@@ -140,9 +197,16 @@ def main():
 											eventPlace = results[0]
 											eventScore = results[1]
 
+								if eventScore <> 'unknown':
+									print('Found Ingraham Team Score for meet_id: ' + str(meet_id))
+
 								# Write Race Data
 								race_id += 1
-								writer_races.writerow({'id' : race_id, 'date' : eventDate.strftime('%Y-%m-%d'), 'location' : eventLocation, 'season': eventSeason, 'bg' : eventGender, 'race_name' : eventFullType, 'distance' : str(eventDistanceMiles), 'type' : eventType, 'score' : eventScore, 'place' : eventPlace, 'teams' : numberResults})	
+								race_id_full = str(meet_id) + '-' + str(race_id)
+								writer_races.writerow({'id' : race_id_full, 'date' : eventDate.strftime('%Y-%m-%d'), 'location' : eventLocation, 'season': eventSeason, 'bg' : eventGender, 'race_name' : eventFullType, 'distance' : str(eventDistanceMiles), 'type' : eventType, 'score' : eventScore, 'place' : eventPlace, 'teams' : numberResults})	
+
+								eventPlace = 'unknown'
+								eventScore = 'unknown'
 
 								# Individual Scores
 								individualRamDepth = 1
@@ -155,12 +219,12 @@ def main():
 			
 										individualName = individualResult.next.next.next.next.next.text
 										results = individualName.split(" ")
-										individualFirstName = eventPlace = results[0]
+										individualFirstName = results[0]
 										individualLastName = results[1]
 
 										individualTime = individualResult.next.next.next.next.next.next.next.text
 										
-										new_row = {'first_name' : individualFirstName, 'last_name' : individualLastName, 'race' : race_id, 'race_time' : individualTime, 'depth' : individualRamDepth, 'place' : individualPlace, 'grade' : individualGrade, 'season' : eventSeason}
+										new_row = {'first_name' : individualFirstName, 'last_name' : individualLastName, 'race' : race_id_full, 'race_time' : individualTime, 'depth' : individualRamDepth, 'place' : individualPlace, 'grade' : individualGrade, 'season' : eventSeason}
 
 										if eventGender == 'Boys':						
 											performance_boys = performance_boys.append(new_row, ignore_index=True)
@@ -178,25 +242,26 @@ def main():
 				by='race_time',
 				ascending=False)
 
-			performanceId = 1
-			with open('performances.csv', 'wb') as csvfile:
-				fieldnames_performances = ['id', 'ram', 'race', 'race_time', 'depth', 'place', 'grade', 'season', 'meet_team_rank']
+			with open('performances.csv', 'ab') as csvfile:
 				writer_performances = csv.DictWriter(csvfile, fieldnames=fieldnames_performances)
-				writer_performances.writeheader()
 
 				# Write out Girls
 				for index, row in performance_girls.iterrows():
 
 					ramId = getRamId(row['first_name'], row['last_name'], row['season'], row['grade'], 'F')
-					writer_performances.writerow({'id' : performanceId, 'ram' : ramId, 'race' : row['race'], 'race_time' : row['race_time'], 'depth' : row['depth'], 'place' : row['place'], 'grade' : row['grade'], 'season' : row['season'], 'meet_team_rank' : index + 1})
-					performanceId += 1
+					performance_id_full = row['race'] + '-' + str(ramId)
+					writer_performances.writerow({'id' : performance_id_full, 'ram' : ramId, 'race' : row['race'], 'race_time' : row['race_time'], 'depth' : row['depth'], 'place' : row['place'], 'grade' : row['grade'], 'season' : row['season'], 'meet_team_rank' : index + 1})
 
 				# Write out Boys
 				for index, row in performance_boys.iterrows():
 
 					ramId = getRamId(row['first_name'], row['last_name'], row['season'], row['grade'], 'M')
-					writer_performances.writerow({'id' : performanceId, 'ram' : ramId, 'race' : row['race'], 'race_time' : row['race_time'], 'depth' : row['depth'], 'place' : row['place'], 'grade' : row['grade'], 'season' : row['season'], 'meet_team_rank' : index + 1})
-					performanceId += 1
+					performance_id_full = row['race'] + '-' + str(ramId)
+					writer_performances.writerow({'id' : performance_id_full, 'ram' : ramId, 'race' : row['race'], 'race_time' : row['race_time'], 'depth' : row['depth'], 'place' : row['place'], 'grade' : row['grade'], 'season' : row['season'], 'meet_team_rank' : index + 1})
+
+				# Clear DataFrames
+				performance_girls = pd.DataFrame(columns=performance_columns)
+				performance_boys = pd.DataFrame(columns=performance_columns)
 
 if __name__ == "__main__":
     main()
