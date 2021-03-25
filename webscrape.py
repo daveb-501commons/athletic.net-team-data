@@ -77,6 +77,9 @@ def main():
 	# 2021 Not Igraham race
 	#urls = ["https://www.athletic.net/CrossCountry/Results/Meet.aspx?Meet=190456&show=all"]
 
+	# Future meet not finished yet 4/2/2021
+	# https://www.athletic.net/CrossCountry/Results/Meet.aspx?Meet=189505&show=all
+
 	#for url in urls:
 
 	# Setup Files
@@ -84,8 +87,8 @@ def main():
 	fieldnames_races = ['id', 'date', 'location', 'season', 'bg', 'race_name', 'distance', 'type', 'score', 'place', 'teams']
 
 	continue_requesting = True
-	successful_request = False
-	meet_id = 0
+	meet_id = 67200
+	#meet_id = 189000
 	sequential_requests_no_data = 0
 
 	while continue_requesting:
@@ -95,23 +98,15 @@ def main():
 		if meet_id % 1000 == 0:
 			print('Checked meet ids ' + str(meet_id - 1000) + ' to ' + str(meet_id - 1))
 
-		try:
-			url = 'https://www.athletic.net/CrossCountry/Results/Meet.aspx?Meet=' + str(meet_id) + '&show=all'
-			r = requests.get(url)
-		except:
-			if successful_request:
-				continue_requesting = False
-
-			continue
-
+		url = 'https://www.athletic.net/CrossCountry/Results/Meet.aspx?Meet=' + str(meet_id) + '&show=all'
+		r = requests.get(url)
 
 		if 'File or directory not found' in r.text:
 			sequential_requests_no_data += 1
 		else:
-			successful_request = True
 			sequential_requests_no_data = 0
 
-		if sequential_requests_no_data > 50 and successful_request:
+		if sequential_requests_no_data > 1000 and meet_id > 190500:
 			continue_requesting = False
 
 		# Check for Ingraham School Id
