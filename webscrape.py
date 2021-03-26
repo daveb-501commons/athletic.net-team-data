@@ -87,8 +87,7 @@ def main():
 	fieldnames_races = ['id', 'date', 'location', 'season', 'bg', 'race_name', 'distance', 'type', 'score', 'place', 'teams']
 
 	continue_requesting = True
-	meet_id = 67200
-	#meet_id = 189000
+	meet_id = 189000
 	sequential_requests_no_data = 0
 
 	while continue_requesting:
